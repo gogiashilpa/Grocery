@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Grocery Order Planner</title>
+
+  <!-- PWA / Home Screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Grocery">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #0f1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: hidden; }
+    input, select, button { font-family: inherit; }
+    input:focus, select:focus { outline: none; border-color: #f59e0b !important; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #1a1d27; }
+    ::-webkit-scrollbar-thumb { background: #2a2e3a; border-radius: 4px; }
+
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+  <script>
+    const { useState, useMemo, useCallback, createElement: h } = React;
+
+    const C = {
+      bg: "#0f1117", card: "#1a1d27", border: "#2a2e3a",
+      text: "#e4e4e7", textMuted: "#8b8fa3", textDim: "#5c607a",
+      accent: "#f59e0b", accentDim: "#b45309",
+      cd: "#f97316", mb: "#22c55e", amz: "#3b82f6", af: "#60a5fa",
+      red: "#ef4444", green: "#22c55e",
+    };
+
+    const APP = {
+      CD: { label: "Country Delight", color: C.cd, short: "CD", note: "Subscription — order in-app" },
+      MB: { label: "Milkbasket", color: C.mb, short: "MB", note: "Add to tomorrow's basket" },
+      AMZ: { label: "Amazon", color: C.amz, short: "AMZ", note: "Regular delivery (1-2 days)" },
+      AF: { label: "Amazon Fresh", color: C.af, short: "AF", note: "Quick delivery (10-15 min)" },
+    };
+
+    // ============ CATALOG DATA ============
+    // To update prices: edit the price field below and save. That's it.
+    const CATALOG = [
+      // PULSES
+      { id:1, name:"Kabuli Chana 1kg", brand:"Organic Tattva", cat:"Pulses", best:"MB", price:227.8, note:"MB 18-22% cheaper than AMZ" },
+      { id:2, name:"Yellow Moong Dal Split 1kg", brand:"Organic Tattva", cat:"Pulses", best:"AMZ", price:202, note:"AMZ marginally cheaper" },
+      { id:3, name:"Masoor Malka Split 500gm", brand:"Organic Tattva", cat:"Pulses", best:"AMZ", price:110, note:"AMZ 10% cheaper" },
+      { id:4, name:"Green Moong Sabut 500gm", brand:"Organic Tattva", cat:"Pulses", best:"AMZ", price:96, note:"AMZ price varies ₹96-108" },
+      { id:5, name:"Green Moong Dal Split 500gm", brand:"Organic Tattva", cat:"Pulses", best:"AMZ", price:121, note:"Same price everywhere" },
+      { id:6, name:"Rajma Chitra 500gm", brand:"Organic Tattva", cat:"Pulses", best:"MB", price:120.6, note:"" },
+      { id:7, name:"Masoor Dal Whole 500gm", brand:"Organic Tattva", cat:"Pulses", best:"MB", price:121.5, note:"" },
+
+      // FLOUR
+      { id:10, name:"Maida 500gm", brand:"Organic Tattva", cat:"Flour", best:"AMZ", price:44, note:"AMZ 32% cheaper than Fresh!" },
+      { id:11, name:"Bajra Flour 500gm", brand:"Organic Tattva", cat:"Flour", best:"MB", price:67.5, note:"" },
+      { id:12, name:"Jowar Flour 500gm", brand:"Organic Tattva", cat:"Flour", best:"MB", price:72, note:"" },
+      { id:13, name:"Ragi Flour 500gm", brand:"Organic Tattva", cat:"Flour", best:"MB", price:85.5, note:"" },
+      { id:14, name:"Suji (Semolina) 500gm", brand:"Organic Tattva", cat:"Flour", best:"MB", price:56.25, note:"" },
+
+      // CEREALS
+      { id:15, name:"Wheat Dalia 500gm", brand:"Organic Tattva", cat:"Cereals", best:"MB", price:63, note:"" },
+      { id:16, name:"Wheat Bran 500gm", brand:"Bagrry's", cat:"Cereals", best:"MB", price:124.4, note:"" },
+      { id:17, name:"Rolled Oats 1kg", brand:"Quaker", cat:"Cereals", best:"AMZ", price:153, note:"" },
+
+      // SPICES
+      { id:20, name:"Cumin Seeds 100gm", brand:"Chuk De", cat:"Spices", best:"MB", price:47, note:"45% cheaper than organic brands on AMZ" },
+      { id:21, name:"Cumin Seeds Organic 100gm", brand:"24 Mantra", cat:"Spices", best:"AMZ", price:117, note:"Consider ChukDe instead" },
+      { id:22, name:"Coriander Seeds 200gm", brand:"Pro Nature", cat:"Spices", best:"AMZ", price:97, note:"AMZ 23% cheaper than Fresh" },
+      { id:23, name:"Chilli Powder 200gm", brand:"24 Mantra", cat:"Spices", best:"AF", price:143, note:"" },
+      { id:24, name:"Mustard Seeds 100gm", brand:"24 Mantra", cat:"Spices", best:"AMZ", price:31, note:"" },
+      { id:25, name:"Red Chilly Stick 100gm", brand:"24 Mantra", cat:"Spices", best:"AMZ", price:95, note:"" },
+      { id:26, name:"White Sesame Seeds 100gm", brand:"Chuk De", cat:"Spices", best:"MB", price:34, note:"" },
+      { id:27, name:"Brown Cardamom 50gm", brand:"Anivarya", cat:"Spices", best:"MB", price:173.13, note:"" },
+      { id:28, name:"Green Cardamom 50gm", brand:"Anivarya", cat:"Spices", best:"MB", price:303.63, note:"" },
+
+      // STAPLES
+      { id:30, name:"Sugar Sulphurfree 1kg", brand:"Uttam", cat:"Staples", best:"AMZ", price:51, note:"Small gap vs MB" },
+      { id:31, name:"Sugar Simply White 5kg", brand:"Uttam", cat:"Staples", best:"MB", price:259, note:"Bulk ₹51.8/kg" },
+      { id:32, name:"Basmati Rice 5kg", brand:"Golden Grain", cat:"Staples", best:"AMZ", price:717, note:"" },
+      { id:33, name:"Salt Lite Low Sodium 1kg", brand:"Tata", cat:"Staples", best:"MB", price:49, note:"" },
+      { id:34, name:"Sabudana 200gm", brand:"Anivarya", cat:"Staples", best:"MB", price:33.93, note:"" },
+      { id:35, name:"Wild Honey 500gm", brand:"24 Mantra", cat:"Staples", best:"MB", price:335.3, note:"" },
+
+      // DAIRY (non-CD)
+      { id:40, name:"Amul LF Milk 250ml", brand:"Amul", cat:"Dairy", best:"MB", price:24, note:"Highest-freq MB item" },
+      { id:41, name:"Amul Butter 100gm", brand:"Amul", cat:"Dairy", best:"MB", price:55, note:"₹2 cheaper than AF" },
+      { id:42, name:"D'lecta Feta 100gm", brand:"D'lecta", cat:"Dairy", best:"AF", price:83, note:"Price volatile ₹83-99" },
+      { id:43, name:"Dodoni Greek Feta 200gm", brand:"Dodoni", cat:"Dairy", best:"MB", price:719, note:"Premium import" },
+      { id:44, name:"Amul Cheese Slices 200gm", brand:"Amul", cat:"Dairy", best:"AMZ", price:115, note:"" },
+      { id:45, name:"A2 Paneer 200gm", brand:"Humpy Farms", cat:"Dairy", best:"AF", price:119, note:"₹595/kg vs CD ₹645/kg" },
+
+      // BEVERAGES
+      { id:50, name:"Catch Club Soda 750ml", brand:"Catch", cat:"Beverages", best:"MB", price:18, note:"High volume" },
+      { id:51, name:"Bisleri Soda 750ml", brand:"Bisleri", cat:"Beverages", best:"MB", price:10.8, note:"40% cheaper than Catch" },
+      { id:52, name:"Tata Tea 500gm", brand:"Tata Tea", cat:"Beverages", best:"MB", price:242, note:"" },
+      { id:53, name:"Tata Tea 1kg", brand:"Tata Tea", cat:"Beverages", best:"MB", price:359, note:"25% off MRP" },
+
+      // CLEANING
+      { id:60, name:"Vim Dishwash 3.2L", brand:"Vim", cat:"Cleaning", best:"MB", price:349, note:"MB 7% cheaper than AF" },
+      { id:61, name:"Surf Excel Matic 5L", brand:"Surf Excel", cat:"Cleaning", best:"AMZ", price:606, note:"" },
+      { id:62, name:"Godrej Ezee 3.2kg", brand:"Godrej Ezee", cat:"Cleaning", best:"AMZ", price:489, note:"" },
+      { id:63, name:"Lizol Floor Cleaner 1.8L", brand:"Lizol", cat:"Cleaning", best:"MB", price:275, note:"" },
+      { id:64, name:"Beco Floor Cleaner 1L", brand:"Beco", cat:"Cleaning", best:"AF", price:122, note:"" },
+
+      // HOUSEHOLD
+      { id:65, name:"Softouch Toilet Tissue 6pk", brand:"Softouch", cat:"Household", best:"MB", price:169, note:"37% off MRP" },
+      { id:66, name:"Kitchen Tissues 6pk", brand:"Origami", cat:"Household", best:"AMZ", price:240, note:"AMZ cheaper than AF" },
+
+      // SNACKS
+      { id:70, name:"Haldiram's Aloo Bhujia 210gm", brand:"Haldiram's", cat:"Snacks", best:"MB", price:42, note:"" },
+      { id:71, name:"Haldiram's Boondi 210gm", brand:"Haldiram's", cat:"Snacks", best:"MB", price:42, note:"" },
+      { id:72, name:"Good Day Cookies", brand:"Britannia", cat:"Snacks", best:"MB", price:75, note:"44% off MRP" },
+      { id:73, name:"Premium Makhana 250gm", brand:"—", cat:"Snacks", best:"MB", price:349, note:"" },
+      { id:74, name:"Salted Peanuts 200gm", brand:"Haldiram's", cat:"Snacks", best:"AF", price:42, note:"" },
+
+      // BAKING & COOKING
+      { id:80, name:"Hershey's Cocoa 225gm", brand:"Hershey's", cat:"Baking", best:"MB", price:290, note:"Price rose to ₹309" },
+      { id:81, name:"Hershey's Choco Syrup 1.3kg", brand:"Hershey's", cat:"Baking", best:"AMZ", price:226, note:"" },
+      { id:82, name:"Borges EVOO 5L", brand:"Borges", cat:"Cooking Oil", best:"AMZ", price:3399, note:"Bulk" },
+
+      // CONDIMENTS
+      { id:85, name:"Heinz Ketchup 900gm", brand:"Heinz", cat:"Condiments", best:"AMZ", price:200, note:"" },
+      { id:86, name:"Maggi Ketchup 960gm", brand:"Maggi", cat:"Condiments", best:"AMZ", price:129, note:"Cheaper than Heinz" },
+      { id:87, name:"Del Monte Black Olives 450gm", brand:"Del Monte", cat:"Condiments", best:"MB", price:264.81, note:"" },
+
+      // BABY CARE
+      { id:90, name:"Aveeno Baby Wash 354ml", brand:"Aveeno", cat:"Baby Care", best:"AMZ", price:682, note:"Buy Qty 2-3" },
+      { id:91, name:"Chicco Kids Toothpaste 50gm", brand:"Chicco", cat:"Baby Care", best:"AMZ", price:114, note:"" },
+      { id:92, name:"Slurpp Farm Pancake Mix 150gm", brand:"Slurpp Farm", cat:"Baby Care", best:"MB", price:159, note:"" },
+
+      // BAKERY
+      { id:95, name:"Whole Wheat Bread 350gm", brand:"Health Factory", cat:"Bakery", best:"AF", price:55, note:"Fresh delivery" },
+
+      // PERSONAL CARE
+      { id:98, name:"Clinic Plus Shampoo 1L", brand:"Clinic Plus", cat:"Personal Care", best:"AMZ", price:399, note:"" },
+
+      // NUTS
+      { id:100, name:"Organic Peanuts 500gm", brand:"Organic Tattva", cat:"Nuts", best:"AMZ", price:121, note:"" },
+      { id:101, name:"Inshell Walnuts", brand:"Tata Sampann", cat:"Nuts", best:"AMZ", price:932, note:"" },
+    ];
+
+    const CATEGORIES = [...new Set(CATALOG.map(i => i.cat))].sort();
+    const FREQUENT_IDS = [40, 50, 41, 70, 71, 2, 1, 60, 11, 12, 13, 90];
+
+    // ============ HELPER: localStorage for persistence ============
+    function loadState(key, fallback) {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+      catch { return fallback; }
+    }
+    function saveState(key, val) {
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    }
+
+    // ============ COMPONENT ============
+    function App() {
+      const [selected, setSelected] = useState(() => new Set(loadState("gp_sel", [])));
+      const [quantities, setQuantities] = useState(() => loadState("gp_qty", {}));
+      const [customItems, setCustomItems] = useState(() => loadState("gp_custom", []));
+      const [search, setSearch] = useState("");
+      const [filterCat, setFilterCat] = useState("All");
+      const [view, setView] = useState("browse");
+      const [showAdd, setShowAdd] = useState(false);
+      const [newItem, setNewItem] = useState({ name: "", brand: "", price: "", app: "MB", cat: "Other" });
+
+      // Persist to localStorage
+      const updateSelected = useCallback((fn) => {
+        setSelected(prev => {
+          const next = fn(prev);
+          saveState("gp_sel", [...next]);
+          return next;
+        });
+      }, []);
+      const updateQty = useCallback((id, q) => {
+        setQuantities(prev => {
+          const next = { ...prev, [id]: Math.max(1, q) };
+          saveState("gp_qty", next);
+          return next;
+        });
+      }, []);
+
+      const allItems = useMemo(() => [...CATALOG, ...customItems], [customItems]);
+
+      const addCustom = useCallback(() => {
+        if (!newItem.name || !newItem.price) return;
+        const id = 9000 + customItems.length + Math.floor(Math.random() * 1000);
+        const item = { id, name: newItem.name, brand: newItem.brand || "—", cat: newItem.cat, best: newItem.app, price: parseFloat(newItem.price), note: "", isCustom: true };
+        const next = [...customItems, item];
+        setCustomItems(next);
+        saveState("gp_custom", next);
+        updateSelected(prev => { const s = new Set(prev); s.add(id); return s; });
+        setQuantities(prev => { const n = { ...prev, [id]: 1 }; saveState("gp_qty", n); return n; });
+        setNewItem({ name: "", brand: "", price: "", app: "MB", cat: "Other" });
+        setShowAdd(false);
+      }, [newItem, customItems, updateSelected]);
+
+      const removeCustom = useCallback((id) => {
+        const next = customItems.filter(i => i.id !== id);
+        setCustomItems(next);
+        saveState("gp_custom", next);
+        updateSelected(prev => { const s = new Set(prev); s.delete(id); return s; });
+      }, [customItems, updateSelected]);
+
+      const toggle = useCallback((id) => {
+        updateSelected(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+        if (!quantities[id]) updateQty(id, 1);
+      }, [quantities, updateSelected, updateQty]);
+
+      const filtered = useMemo(() => {
+        return allItems.filter(item => {
+          const ms = !search || item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase());
+          const mc = filterCat === "All" || item.cat === filterCat;
+          return ms && mc;
+        });
+      }, [search, filterCat, allItems]);
+
+      const summary = useMemo(() => {
+        const byApp = {};
+        let total = 0;
+        allItems.filter(i => selected.has(i.id)).forEach(item => {
+          const qty = quantities[item.id] || 1;
+          const lineTotal = item.price * qty;
+          const app = item.best;
+          if (!byApp[app]) byApp[app] = { items: [], total: 0 };
+          byApp[app].items.push({ ...item, qty, lineTotal });
+          byApp[app].total += lineTotal;
+          total += lineTotal;
+        });
+        return { byApp, total, count: selected.size };
+      }, [selected, quantities, allItems]);
+
+      const sc = selected.size;
+      const s = (tag, props, ...kids) => h(tag, props, ...kids);
+
+      // ---- Render Helpers ----
+      const renderHeader = () =>
+        s("div", { style: { background: C.card, borderBottom: `1px solid ${C.border}`, padding: "14px 16px", position: "sticky", top: 0, zIndex: 10 } },
+          s("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+            s("div", null,
+              s("h1", { style: { fontSize: 18, fontWeight: 700, margin: 0, fontFamily: "'Space Grotesk', sans-serif" } },
+                s("span", { style: { color: C.accent } }, "🛒 "),
+                "Grocery Planner"
+              ),
+              s("div", { style: { fontSize: 11, color: C.textDim, marginTop: 2 } },
+                `${CATALOG.length} items${customItems.length ? ` + ${customItems.length} custom` : ""}`
+              )
+            ),
+            s("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+              sc > 0 && s("div", { style: { fontSize: 12, color: C.accent, fontWeight: 600 } },
+                `${sc} · ₹${Math.round(summary.total).toLocaleString()}`
+              ),
+              s("button", {
+                onClick: () => setView(view === "browse" ? "summary" : "browse"),
+                style: { padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: view === "summary" ? C.accent : C.border, color: view === "summary" ? C.bg : C.text }
+              }, view === "browse" ? `Split${sc > 0 ? ` (${sc})` : ""}` : "← List")
+            )
+          )
+        );
+
+      const renderAddForm = () =>
+        s("div", { style: { margin: "12px 16px 0" } },
+          !showAdd
+            ? s("button", {
+                onClick: () => setShowAdd(true),
+                style: { width: "100%", padding: "10px", borderRadius: 10, border: `1px dashed ${C.accent}60`, background: `${C.accent}08`, color: C.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }
+              }, "+ Add item not in catalog")
+            : s("div", { style: { background: C.card, borderRadius: 12, padding: 14, border: `1px solid ${C.accent}40` } },
+                s("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 10 } },
+                  s("div", { style: { fontSize: 14, fontWeight: 700, color: C.accent } }, "Add Custom Item"),
+                  s("button", { onClick: () => setShowAdd(false), style: { background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 18 } }, "×")
+                ),
+                s("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 } },
+                  s("input", { placeholder: "Item name *", value: newItem.name, onChange: e => setNewItem({ ...newItem, name: e.target.value }),
+                    style: { gridColumn: "1/-1", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 14 } }),
+                  s("input", { placeholder: "Brand", value: newItem.brand, onChange: e => setNewItem({ ...newItem, brand: e.target.value }),
+                    style: { padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 14 } }),
+                  s("input", { placeholder: "Price ₹ *", type: "number", inputMode: "decimal", value: newItem.price, onChange: e => setNewItem({ ...newItem, price: e.target.value }),
+                    style: { padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 14 } }),
+                  s("select", { value: newItem.app, onChange: e => setNewItem({ ...newItem, app: e.target.value }),
+                    style: { padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13 } },
+                    ...Object.entries(APP).map(([k, v]) => s("option", { key: k, value: k }, v.label))
+                  ),
+                  s("select", { value: newItem.cat, onChange: e => setNewItem({ ...newItem, cat: e.target.value }),
+                    style: { padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13 } },
+                    ...[...CATEGORIES, "Other"].map(c => s("option", { key: c, value: c }, c))
+                  )
+                ),
+                s("button", { onClick: addCustom, disabled: !newItem.name || !newItem.price,
+                  style: { width: "100%", padding: 10, borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: newItem.name && newItem.price ? "pointer" : "default", background: newItem.name && newItem.price ? C.accent : C.border, color: newItem.name && newItem.price ? C.bg : C.textDim }
+                }, "Add to Order")
+              )
+        );
+
+      const renderQuickAdd = () => {
+        if (search || filterCat !== "All") return null;
+        return s("div", { style: { padding: "12px 16px 0" } },
+          s("div", { style: { fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 600 } }, "Quick Add — Regulars"),
+          s("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 } },
+            ...FREQUENT_IDS.map(id => {
+              const item = CATALOG.find(i => i.id === id);
+              if (!item) return null;
+              const isSel = selected.has(id);
+              return s("button", {
+                key: id, onClick: () => toggle(id),
+                style: { padding: "5px 10px", borderRadius: 16, border: `1px solid ${isSel ? APP[item.best].color : C.border}`, background: isSel ? APP[item.best].color + "20" : "transparent", color: isSel ? APP[item.best].color : C.textMuted, fontSize: 11, cursor: "pointer" }
+              }, (isSel ? "✓ " : "") + item.name.replace(/ \d+gm| \d+ml| \d+kg| \d+L/g, "").substring(0, 22));
+            })
+          )
+        );
+      };
+
+      const renderItem = (item) => {
+        const isSel = selected.has(item.id);
+        const app = APP[item.best];
+        const qty = quantities[item.id] || 1;
+        return s("div", {
+          key: item.id, onClick: () => toggle(item.id),
+          style: { background: isSel ? app.color + "08" : C.card, borderRadius: 10, padding: "11px 14px", border: `1px solid ${isSel ? app.color + "60" : C.border}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }
+        },
+          // Checkbox
+          s("div", { style: { width: 20, height: 20, borderRadius: 5, border: `2px solid ${isSel ? app.color : C.border}`, background: isSel ? app.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: C.bg, fontWeight: 700, flexShrink: 0 } }, isSel ? "✓" : ""),
+          // Info
+          s("div", { style: { flex: 1, minWidth: 0 } },
+            s("div", { style: { fontSize: 13, fontWeight: 500, color: C.text } }, item.name),
+            s("div", { style: { fontSize: 10, color: C.textDim, marginTop: 1 } },
+              item.brand + " · " + item.cat,
+              item.isCustom && s("span", { style: { marginLeft: 4, padding: "1px 5px", borderRadius: 6, background: C.accent + "20", color: C.accent, fontSize: 9, fontWeight: 600 } }, "Custom"),
+              item.note && !item.isCustom && " · " + item.note
+            )
+          ),
+          // Price
+          s("div", { style: { textAlign: "right", flexShrink: 0 } },
+            s("div", { style: { fontSize: 15, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: C.text } }, "₹" + item.price),
+            s("div", { style: { fontSize: 9, color: app.color, fontWeight: 600 } }, app.short)
+          ),
+          // Qty
+          isSel && s("div", { onClick: e => e.stopPropagation(), style: { display: "flex", alignItems: "center", gap: 3, flexShrink: 0 } },
+            s("button", { onClick: () => updateQty(item.id, qty - 1), style: { width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" } }, "−"),
+            s("div", { style: { width: 24, textAlign: "center", fontSize: 13, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: C.text } }, qty),
+            s("button", { onClick: () => updateQty(item.id, qty + 1), style: { width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" } }, "+"),
+            item.isCustom && s("button", { onClick: () => removeCustom(item.id), style: { width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.red}40`, background: C.red + "10", color: C.red, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 3 } }, "✕")
+          )
+        );
+      };
+
+      const renderBrowse = () =>
+        s("div", { style: { padding: "12px 16px 80px" } },
+          // Search + filter
+          s("div", { style: { display: "flex", gap: 8, marginBottom: 4 } },
+            s("input", { type: "text", placeholder: "Search items or brands...", value: search, onChange: e => setSearch(e.target.value),
+              style: { flex: 1, padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 14 } }),
+            s("select", { value: filterCat, onChange: e => setFilterCat(e.target.value),
+              style: { padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 12, maxWidth: 120 } },
+              s("option", { value: "All" }, "All"),
+              ...CATEGORIES.map(c => s("option", { key: c, value: c }, c))
+            )
+          ),
+          renderAddForm(),
+          renderQuickAdd(),
+          s("div", { style: { marginTop: 12 } }, ...filtered.map(renderItem)),
+          filtered.length === 0 && s("div", { style: { textAlign: "center", padding: 40, color: C.textDim } }, "No items found")
+        );
+
+      const renderSummary = () => {
+        if (sc === 0) return s("div", { style: { textAlign: "center", padding: 60, color: C.textDim } },
+          s("div", { style: { fontSize: 36, marginBottom: 10 } }, "🛒"),
+          s("div", { style: { fontSize: 15 } }, "No items selected"),
+          s("div", { style: { fontSize: 12, marginTop: 4 } }, "Go back and pick items")
+        );
+
+        return s("div", { style: { padding: "12px 16px 80px" } },
+          // Total
+          s("div", { style: { background: `linear-gradient(135deg, ${C.accentDim}30, ${C.card})`, borderRadius: 12, padding: "14px 18px", marginBottom: 16, border: `1px solid ${C.accentDim}60`, display: "flex", justifyContent: "space-between", alignItems: "center" } },
+            s("div", null,
+              s("div", { style: { fontSize: 11, color: C.textDim, textTransform: "uppercase", letterSpacing: 1 } }, "Total Estimate"),
+              s("div", { style: { fontSize: 28, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.accent } }, "₹" + Math.round(summary.total).toLocaleString())
+            ),
+            s("div", { style: { textAlign: "right" } },
+              s("div", { style: { fontSize: 22, fontWeight: 700, color: C.text } }, summary.count),
+              s("div", { style: { fontSize: 11, color: C.textDim } }, `across ${Object.keys(summary.byApp).length} apps`)
+            )
+          ),
+
+          // Per app
+          ...Object.entries(summary.byApp).sort((a, b) => b[1].total - a[1].total).map(([code, data]) => {
+            const app = APP[code];
+            return s("div", { key: code, style: { marginBottom: 14 } },
+              // App header
+              s("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: app.color + "15", borderRadius: "10px 10px 0 0", border: `1px solid ${app.color}40`, borderBottom: "none" } },
+                s("div", null,
+                  s("div", { style: { fontSize: 15, fontWeight: 700, color: app.color } }, app.label),
+                  s("div", { style: { fontSize: 10, color: C.textDim } }, app.note)
+                ),
+                s("div", { style: { fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: app.color } }, "₹" + Math.round(data.total).toLocaleString())
+              ),
+              // Items
+              s("div", { style: { background: C.card, borderRadius: "0 0 10px 10px", border: `1px solid ${C.border}`, borderTop: "none" } },
+                ...data.items.map((item, i) =>
+                  s("div", { key: item.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 14px", borderTop: i > 0 ? `1px solid ${C.border}` : "none" } },
+                    s("div", { style: { flex: 1 } },
+                      s("div", { style: { fontSize: 13, color: C.text } }, item.name,
+                        item.isCustom && s("span", { style: { marginLeft: 5, padding: "1px 5px", borderRadius: 6, background: C.accent + "20", color: C.accent, fontSize: 9, fontWeight: 600 } }, "Custom")
+                      ),
+                      s("div", { style: { fontSize: 10, color: C.textDim } }, item.brand)
+                    ),
+                    s("div", { style: { fontSize: 11, color: C.textMuted, marginRight: 10 } }, "×" + item.qty),
+                    s("div", { style: { fontSize: 14, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", color: C.text } }, "₹" + Math.round(item.lineTotal))
+                  )
+                )
+              )
+            );
+          }),
+
+          // How to order
+          s("div", { style: { background: C.card, borderRadius: 10, padding: "14px 16px", border: `1px solid ${C.border}`, marginTop: 4 } },
+            s("div", { style: { fontSize: 13, fontWeight: 700, color: C.accent, marginBottom: 6 } }, "How to Order"),
+            ...Object.entries(summary.byApp).map(([code, data]) => {
+              const app = APP[code];
+              return s("div", { key: code, style: { fontSize: 12, color: C.textMuted, marginBottom: 4, lineHeight: 1.5 } },
+                s("span", { style: { color: app.color, fontWeight: 600 } }, app.label),
+                ` (${data.items.length} items, ₹${Math.round(data.total).toLocaleString()}) — ${app.note}`
+              );
+            })
+          ),
+
+          // Clear
+          s("button", {
+            onClick: () => { updateSelected(() => new Set()); setView("browse"); },
+            style: { width: "100%", padding: 11, borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.textDim, fontSize: 13, cursor: "pointer", marginTop: 10 }
+          }, "Clear All & Start Over")
+        );
+      };
+
+      return s("div", { style: { background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: "env(safe-area-inset-bottom)" } },
+        renderHeader(),
+        view === "browse" ? renderBrowse() : renderSummary()
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+  </script>
+</body>
+</html>
